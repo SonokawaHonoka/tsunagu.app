@@ -407,7 +407,7 @@
                 <div>
                     <label class="block font-bold text-slate-700 mb-1">画像・動画資料の添付</label>
                     <div class="border-2 border-dashed border-slate-200 rounded-xl p-3 sm:p-4 text-center hover:bg-slate-50 transition-all cursor-pointer relative">
-                        <input type="file" id="input-file" accept="image/*,video/*" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(this)">
+                        <input type="file" id="input-file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(this)">
                         <div id="file-placeholder" class="text-slate-400 space-y-1">
                             <i class="fa-solid fa-cloud-arrow-up text-base"></i>
                             <p class="text-[11px]">クリックまたはドラッグ＆ドロップでメディアを追加</p>
@@ -514,7 +514,7 @@
             </div>
             <div>
                 <label class="block font-bold text-slate-700 mb-1">画像・動画を添える (任意)</label>
-                <input type="file" id="reply-file" accept="image/*,video/*" class="w-full text-slate-500 text-[11px]">
+                <input type="file" id="reply-file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm" class="w-full text-slate-500 text-[11px]">
             </div>
             <div class="flex justify-end space-x-2 pt-2">
                 <button onclick="closeReplyModal()" class="px-3 py-1.5 bg-slate-100 rounded-lg text-slate-600">キャンセル</button>
@@ -1146,12 +1146,19 @@
         function handleFileSelect(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm'];
+                const maxFileSize = 20 * 1024 * 1024;
+                if (!allowedTypes.includes(file.type) || file.size > maxFileSize) {
+                    alert('JPEG、PNG、GIF、WebP、MP4、WebM形式の20MB以下のファイルを選択してください。');
+                    input.value = '';
+                    return;
+                }
+                if (uploadedFileUrl) URL.revokeObjectURL(uploadedFileUrl);
                 uploadedFileUrl = URL.createObjectURL(file);
-                
                 document.getElementById('file-placeholder').classList.add('hidden');
                 document.getElementById('file-selected').classList.remove('hidden');
                 document.getElementById('file-selected').classList.add('flex');
-                document.getElementById('file-name-text').innerText = file.name;
+                document.getElementById('file-name-text').textContent = file.name;
             }
         }
 
@@ -1228,6 +1235,13 @@
 
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        }
+
+        function safeMediaUrl(value) {
+            const url = String(value ?? '');
+            if (/^blob:(?:https?:\/\/|null\/)[^<>\"'\s]+$/i.test(url)) return url;
+            if (/^(?!\/\/)[a-z0-9_./-]+\.(?:png|jpe?g|gif|webp|mp4|webm|mov|ogg)$/i.test(url)) return url;
+            return '';
         }
 
         window.applyMapTagFilters = function() {
@@ -1307,10 +1321,10 @@
                 const popupContent = `
                     <div class="p-1 pt-5 text-xs space-y-1 relative" style="min-width: 150px;">
                         <button type="button" aria-label="ピンの詳細を閉じる" title="閉じる" onclick="closePostPinPopup(event)" class="absolute right-0 top-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center font-bold text-base leading-none">×</button>
-                        <strong class="text-slate-800 block">${p.title}</strong>
-                        <span class="text-[10px] text-slate-400 block">${p.date}</span>
+                        <strong class="text-slate-800 block">${escapeHtml(p.title)}</strong>
+                        <span class="text-[10px] text-slate-400 block">${escapeHtml(p.date)}</span>
                         <span class="text-[10px] text-blue-700 block">災害種別: ${escapeHtml(p.disasterType || '未設定')}${p.quakeName ? ` / ${escapeHtml(p.quakeName)}` : ''}</span>
-                        <p class="text-slate-600 line-clamp-2">${p.content}</p>
+                        <p class="text-slate-600 line-clamp-2">${escapeHtml(p.content)}</p>
                         <button onclick="showPostDetail(${p.id})" class="mt-1 text-[10px] text-blue-600 font-bold hover:underline flex items-center space-x-0.5"><span>続きを読む ➔</span></button>
                     </div>
                 `;
@@ -1361,7 +1375,7 @@
             modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4";
             
             let typeBadge = p.type === 'media' 
-                ? `<span class="px-2 py-0.5 bg-slate-900 text-white text-[10px] rounded font-medium">■ 報道記録 [${p.mediaName}]</span>`
+                ? `<span class="px-2 py-0.5 bg-slate-900 text-white text-[10px] rounded font-medium">■ 報道記録 [${escapeHtml(p.mediaName)}]</span>`
                 : `<span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] rounded font-medium">👤 一般ユーザー</span>`;
 
             let feelingSection = '';
@@ -1374,17 +1388,18 @@
 
             let fileSection = '';
             if (p.imagePath) {
-                const isVideo = p.imagePath.match(/\.(mp4|webm|mov|ogg)$/i) || p.imagePath.startsWith('data:video');
-                if (isVideo) {
-                    fileSection = `<video src="${p.imagePath}" controls class="w-full rounded-xl border border-slate-200 shadow-sm bg-black max-h-[300px]"></video>`;
-                } else {
-                    fileSection = `<img src="${p.imagePath}" class="w-full rounded-xl border border-slate-200 shadow-sm" onerror="this.style.display='none';">`;
+                const mediaUrl = safeMediaUrl(p.imagePath);
+                const isVideo = /\.(mp4|webm)$/i.test(mediaUrl);
+                if (mediaUrl && isVideo) {
+                    fileSection = `<video src="${escapeHtml(mediaUrl)}" controls class="w-full rounded-xl border border-slate-200 shadow-sm bg-black max-h-[300px]"></video>`;
+                } else if (mediaUrl) {
+                    fileSection = `<img src="${escapeHtml(mediaUrl)}" class="w-full rounded-xl border border-slate-200 shadow-sm" onerror="this.style.display='none';">`;
                 }
             }
 
             let repliesHtml = p.replies ? p.replies.map(r => `
                 <div class="bg-slate-50 p-2.5 rounded-xl text-xs text-slate-600 border border-slate-100">
-                    <span class="font-bold text-slate-700">${r.author}:</span> ${r.text}
+                    <span class="font-bold text-slate-700">${escapeHtml(r.author)}:</span> ${escapeHtml(r.text)}
                 </div>
             `).join('') : '';
 
@@ -1394,11 +1409,11 @@
                     <div class="space-y-1">
                         <div class="flex items-center space-x-2">
                             ${typeBadge}
-                            <span class="text-[11px] text-slate-400">${p.date}</span>
+                            <span class="text-[11px] text-slate-400">${escapeHtml(p.date)}</span>
                         </div>
-                        <h3 class="text-sm font-bold text-slate-800">${p.title}</h3>
+                        <h3 class="text-sm font-bold text-slate-800">${escapeHtml(p.title)}</h3>
                     </div>
-                    <p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">${p.content}</p>
+                    <p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(p.content)}</p>
                     ${tagSection}
                     ${fileSection}
                     ${feelingSection}
@@ -1438,11 +1453,12 @@
 
                 let fileSection = '';
                 if (post.imagePath) {
-                    const isVideo = post.imagePath.match(/\.(mp4|webm|mov|ogg)$/i) || post.imagePath.startsWith('data:video');
-                    if (isVideo) {
-                        fileSection = `<div class="mt-2"><video src="${post.imagePath}" muted autoplay loop playsinline class="h-16 w-24 object-cover rounded-lg border border-slate-100 bg-black"></video></div>`;
-                    } else {
-                        fileSection = `<div class="mt-2"><img src="${post.imagePath}" class="h-16 w-24 object-cover rounded-lg border border-slate-100" onerror="this.style.display='none';"></div>`;
+                    const mediaUrl = safeMediaUrl(post.imagePath);
+                    const isVideo = /\.(mp4|webm)$/i.test(mediaUrl);
+                    if (mediaUrl && isVideo) {
+                        fileSection = `<div class="mt-2"><video src="${escapeHtml(mediaUrl)}" muted autoplay loop playsinline class="h-16 w-24 object-cover rounded-lg border border-slate-100 bg-black"></video></div>`;
+                    } else if (mediaUrl) {
+                        fileSection = `<div class="mt-2"><img src="${escapeHtml(mediaUrl)}" class="h-16 w-24 object-cover rounded-lg border border-slate-100" onerror="this.style.display='none';"></div>`;
                     }
                 }
 
@@ -1452,7 +1468,7 @@
                     post.replies.forEach(rep => {
                         repliesHtml += `
                             <div class="text-[11px] text-slate-600 leading-relaxed">
-                                <span class="font-bold text-slate-700">${rep.author}:</span> ${rep.text}
+                                <span class="font-bold text-slate-700">${escapeHtml(rep.author)}:</span> ${escapeHtml(rep.text)}
                             </div>`;
                     });
                     repliesHtml += `</div>`;
@@ -1480,16 +1496,16 @@
                     <div class="flex justify-between items-start gap-2 mb-2">
                         <div class="flex items-center space-x-1.5">
                             ${typeBadge}
-                            <span class="text-[10px] text-slate-400 font-medium">${post.year}年 / ${post.location}</span>
+                            <span class="text-[10px] text-slate-400 font-medium">${escapeHtml(post.year)}年 / ${escapeHtml(post.location)}</span>
                         </div>
                         ${ownActionsHtml}
                     </div>
                     <h4 class="text-xs font-bold text-slate-800 mb-1 flex items-center gap-1">
                         <i class="fa-solid fa-location-dot text-slate-400 text-[10px]"></i>
-                        ${post.title}
+                        ${escapeHtml(post.title)}
                     </h4>
                     <div class="flex flex-wrap gap-1 mb-2 text-[9px]"><span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">${escapeHtml(post.disasterType || '災害種別未設定')}</span>${post.quakeName ? `<span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">${escapeHtml(post.quakeName)}</span>` : ''}</div>
-                    <p class="text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap">${post.content}</p>
+                    <p class="text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(post.content)}</p>
                     ${fileSection}
                     <div class="mt-3 flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-50 pt-2">
                         <div class="flex items-center space-x-3">
@@ -1880,7 +1896,7 @@
         function isJapaneseLocalGovernmentSite(rawUrl) {
             try {
                 const host = new URL(rawUrl).hostname.toLowerCase();
-                return host.endsWith('.lg.jp') || host.endsWith('.city.') || host.includes('.city.') || host.endsWith('.tokyo.jp');
+                return host.endsWith('.lg.jp') || host.endsWith('.tokyo.jp');
             } catch (_) {
                 return false;
             }
