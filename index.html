@@ -41,6 +41,13 @@
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
+        circle-img {
+  width: 200px;
+  height: 200px; /* width と同じ値にする */
+  border-radius: 50%; /* 円形にする */
+  object-fit: cover; /* 縦横比を維持して枠いっぱいに表示 */
+  object-position: center; /* 切り抜く中心位置（人物なら top など） */
+}
     </style>
 </head>
 <body class="overflow-hidden h-screen w-screen relative">
@@ -91,10 +98,7 @@
                         同志社大学 文化情報学部・文化情報学研究科<br>
                     </p>
                 </div>    
-            <video controls width="640">
-            <source src="explain.mov" type="video/mov">
-            このブラウザは動画再生に対応していません。
-            </video>
+            
             </div>
             
             <div class="w-full flex flex-col items-center pb-20 z-10" id="intro-trigger">
